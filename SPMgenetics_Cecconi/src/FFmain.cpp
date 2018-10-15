@@ -68,6 +68,8 @@ int main(int argc, char const *argv[])
     std::cout 
     <<nExec<< ", " //executors number
     <<totalFFElapsed.count()<<", " //completion time
+    <<tf.approxElapsedTime.count()<< ", " //fitness comp time
+
     <<tf.fitElapsedTime.count()<< ", " //fitness comp time
     <<ppltSize<<", " //trees number
     <<maxHeigth<<", " //max tree heigth

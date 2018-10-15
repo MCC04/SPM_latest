@@ -30,7 +30,9 @@ class Genetic{
     public:
 
         std::chrono::duration<double> fitElapsedTime; 
+        std::chrono::duration<double> approxElapsedTime; 
         std::chrono::duration<double> nextGenElapsedTime;
+        std::chrono::duration<double> compFitElapsedTime;
 
         Genetic() ;
         Genetic(std::vector<Tree *> p, std::vector<Point> ps, int perc);

@@ -8,6 +8,9 @@ Genetic::Genetic(std::vector<Tree *> p, std::vector<Point> ps, int perc)
     this->points=ps;
     this->percentage=((int)ceil(population.size()*perc/100.0)); 
     this->fitSum=0;
+    this->fitElapsedTime=std::chrono::seconds::zero();
+    this->nextGenElapsedTime=std::chrono::seconds::zero();
+    this->compFitElapsedTime=std::chrono::seconds::zero();
 } 
 
 Genetic::~Genetic() {}
@@ -16,24 +19,46 @@ void Genetic::approxFunction(int maxIter, double tol){
     int it=1;
     bool fit=false;
 
-    std::chrono::system_clock::time_point start, end, startFit,endFit;
+    std::chrono::system_clock::time_point start, end, startFit,endFit,startGen,endGen,fitCompStart,fitCompEnd;
     start = std::chrono::system_clock::now();
-                   
+    startFit = std::chrono::system_clock::now();   
+
     for(int i=0;i<population.size();i++){
+
+        fitCompStart =std::chrono::system_clock::now();
         double sum= computeFit( i);
+        fitCompEnd=std::chrono::system_clock::now();
+        std::chrono::duration<double> compEl=fitCompEnd-fitCompStart;
+        //std::cout << "___computeFit Time:" <<compEl.count()<<std::endl;
+        this->compFitElapsedTime+=compEl;
+
         if(sum!=DBL_MAX)
             fitValues.push_back(std::make_pair(i,sqrt(sum)));
         else
             fitValues.push_back(std::make_pair(i,DBL_MAX));
     }      
+    endFit = std::chrono::system_clock::now();
+    std::chrono::duration<double> el = endFit - startFit;
+    std::cout <<it<< "___Fits Init Time:" <<el.count()<<std::endl;
         
+
+    nextGeneration();
+
+
     while(it<maxIter) 
     {
-        weigths.clear();
         startFit = std::chrono::system_clock::now(); 
+        weigths.clear();      
         
         for(int i=0;i<indexes.size();i++){
+
+            fitCompStart =std::chrono::system_clock::now();
             double sum=computeFit(indexes[i]);
+            fitCompEnd=std::chrono::system_clock::now();
+            std::chrono::duration<double> compEl=fitCompEnd-fitCompStart;
+            //std::cout << "___computeFit Time:" <<compEl.count()<<std::endl;
+            this->compFitElapsedTime+=compEl;
+            
             if(sum!=DBL_MAX)
                 fitValues[indexes[i]].second=sqrt(sum);                                      
             else          
@@ -50,8 +75,17 @@ void Genetic::approxFunction(int maxIter, double tol){
             [](double &a, std::pair<int,double> &b){return a + b.second;});     
 
         endFit = std::chrono::system_clock::now();
-        std::chrono::duration<double> el = endFit - startFit; //std::cout <<it<< "___Fit Seq Time:" <<el.count()<<std::endl;      
+        //std::chrono::duration<double> el = endFit - startFit; //std::cout <<it<< "___Fit Seq Time:" <<el.count()<<std::endl; 
+        el = endFit - startFit; 
+        std::cout <<it<< "___Fit Update Time:" <<el.count()<<std::endl;    
+        this->fitElapsedTime+=el;  
+
+        startGen =std::chrono::system_clock::now();
         nextGeneration();
+        endGen=std::chrono::system_clock::now();
+        el =  endGen -startGen ;
+        std::cout <<it<< "___Next Gen Time:" <<el.count()<<std::endl;  
+        this->nextGenElapsedTime+=el;
         it+=1;        
     }
     if(!fit){
@@ -67,7 +101,7 @@ void Genetic::approxFunction(int maxIter, double tol){
         [](std::pair<int, double>&i, std::pair<int, double>&j){ return i.second < j.second;});
 
     end = std::chrono::system_clock::now();
-    this->fitElapsedTime = end - start;
+    this->approxElapsedTime = end - start;
 }
 
 double Genetic::computeFit(const int i){
@@ -95,8 +129,8 @@ double Genetic::computeFit(const int i){
 void Genetic::nextGeneration(){
     indexes.clear();
 
-    std::chrono::system_clock::time_point start, end;
-    start = std::chrono::system_clock::now();
+    //std::chrono::system_clock::time_point start, end;
+    //start = std::chrono::system_clock::now();
 
     computeWeights();
     int gOp;
@@ -123,8 +157,10 @@ void Genetic::nextGeneration(){
         }
         //else std::cout << "WARN: Invalid selected index, value < 0!"<<std::endl;   
     } 
-    end = std::chrono::system_clock::now();
-    this->nextGenElapsedTime = end - start;  //std::cout << "GEN_elapsed:" << this->nextGenElapsedTime.count() << std::endl;
+   // end = std::chrono::system_clock::now();
+   // std::chrono::duration<double> el=end - start;
+   // this->nextGenElapsedTime += el;  //std::cout << "GEN_elapsed:" << this->nextGenElapsedTime.count() << std::endl;
+   // std::cout << "___NextGen elapsed:" << el.count() << std::endl;
 }
 
 void Genetic::computeWeights(){
