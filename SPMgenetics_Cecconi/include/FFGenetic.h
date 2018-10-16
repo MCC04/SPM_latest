@@ -6,9 +6,9 @@
 
 class FFGenetic: public Genetic{
     private:
-        int nw;
         ff::ParallelFor *pf;
     protected:
+        int nExecutors;
         void builder(int start,int end);
         void updater(int start,int end);
     public:

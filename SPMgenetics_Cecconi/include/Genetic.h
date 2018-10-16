@@ -25,14 +25,17 @@ class Genetic{
         double fitSum;
 
         void computeWeights();
-        std::pair<int, int> Select();        
+        std::pair<int, int> Select(); 
+        void sortFitness();
+        void fitnessSum();       
 
     public:
 
-        std::chrono::duration<double> fitElapsedTime; 
-        std::chrono::duration<double> approxElapsedTime; 
-        std::chrono::duration<double> nextGenElapsedTime;
-        std::chrono::duration<double> compFitElapsedTime;
+        std::chrono::duration<double> fitInitElapsed; //initial computation of all fitness
+        std::chrono::duration<double> fitUpdateElapsed; //total time in update only modified trees fitness
+        std::chrono::duration<double> compFitElapsed; //total time spent in compFit(i) function
+        std::chrono::duration<double> nextGenElapsed; //total time spent in nextGeneration() function
+        std::chrono::duration<double> approxElapsed;  //total time spent in approxFunction(iter,tol)        
 
         Genetic() ;
         Genetic(std::vector<Tree *> p, std::vector<Point> ps, int perc);

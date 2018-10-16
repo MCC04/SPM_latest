@@ -7,23 +7,25 @@
 FFGenetic::FFGenetic(std::vector<Tree *> p, std::vector<Point> ps, int perc, unsigned int nEx)
 :Genetic(p,ps,perc)
 {
-    this->nw= nEx;
+    this->nExecutors= nEx;
     pf = new ff::ParallelFor(nEx);
 };
 
-FFGenetic::~FFGenetic(){};
+FFGenetic::~FFGenetic(){
+    delete pf;
+};
 
 std::mutex mtx;
-
 void FFGenetic::approxFunctionFF(int maxIter, double tol){
     int it=1;
     bool fit=false;    
 
-    std::chrono::system_clock::time_point start, end, startFit,endFit;
+    std::chrono::system_clock::time_point start,end,startFit,endFit,startGen,endGen;
     start = std::chrono::system_clock::now();
 
     startFit = std::chrono::system_clock::now();
-    pf->parallel_for(0, this->population.size(),  1,0,          
+    int chunk=this->population.size()/this->nExecutors;
+    pf->parallel_for(0, this->population.size(), 1,chunk,  //1,0,      
     [&](const long i){            
         double sum=this->computeFit(i);
         double n=0.0;
@@ -35,17 +37,23 @@ void FFGenetic::approxFunctionFF(int maxIter, double tol){
         std::unique_lock<std::mutex> lk(mtx);
         fitValues.push_back(std::make_pair(i,n));
         lk.unlock();            
-    }, this->nw);     
+    }, this->nExecutors);     
+    sortFitness();
+    fitnessSum();
     endFit = std::chrono::system_clock::now();
-    std::cout <<it<< "___Fit Init Time:" <<(endFit-startFit).count()<<std::endl; 
-    this->fitElapsedTime+=endFit-startFit;
+    this->fitInitElapsed=endFit-startFit;
       
-nextGeneration();
+    startGen = std::chrono::system_clock::now();
+    nextGeneration();
+    endGen = std::chrono::system_clock::now();
+    this->nextGenElapsed+=endGen-startGen;
+
     while(it<maxIter) 
     {     
         weigths.clear(); 
-        startFit = std::chrono::system_clock::now();       
-        /*pf->parallel_for(0, this->indexes.size(), 1,0,
+        startFit = std::chrono::system_clock::now(); 
+        //chunk=this->indexes.size()/this->nExecutors;    
+        pf->parallel_for(0, this->indexes.size(), 1,0,//1,chunk,
         [&](const long i){ 
             double sum=this->computeFit(i);
             double n=0.0;
@@ -55,14 +63,9 @@ nextGeneration();
                 n=DBL_MAX;
 
             fitValues[indexes[i]].second= n;                     
-        }, this->nw);     
-*/
-            // pf->threadPause();
+        }, this->nExecutors);    
 
-
-
-            for(int i=0;i<indexes.size();i++){
-
+        /*for(int i=0;i<indexes.size();i++){
             //fitCompStart =std::chrono::system_clock::now();
             double sum=computeFit(indexes[i]);
             //fitCompEnd=std::chrono::system_clock::now();
@@ -74,27 +77,21 @@ nextGeneration();
                 fitValues[indexes[i]].second=sqrt(sum);                                      
             else          
                 fitValues[indexes[i]].second=DBL_MAX;
-        }
+        }*/
 
-        std::sort(fitValues.begin(),fitValues.end(),
-            [](std::pair<int, double>&i, std::pair<int, double>&j){ return i.second < j.second;});
-
+        sortFitness();
         if(this->getBestFit().second < tol){
             fit=true;
             break;
         } 
-
-        this->fitSum=std::accumulate(fitValues.begin(),fitValues.end(),0.0,
-            [](double &a, std::pair<int,double> &b){return a + b.second;});
-
-       // endFit = std::chrono::system_clock::now();
-       // std::chrono::duration<double> elapsedfit = endFit - startFit; //std::cout <<"ITER:"<<it<< "___FF Time:" <<elapsedfit.count()<<std::endl;
-       endFit = std::chrono::system_clock::now();
-    std::cout <<it<< "___Fit Update Time:" <<(endFit-startFit).count()<<std::endl; 
-    this->fitElapsedTime+=endFit-startFit; 
+        fitnessSum();
+        endFit = std::chrono::system_clock::now();
+        this->fitUpdateElapsed+=endFit-startFit;        
        
-       
+        startGen = std::chrono::system_clock::now();
         nextGeneration();
+        endGen = std::chrono::system_clock::now();
+        this->nextGenElapsed+=endGen-startGen;
         it+=1;            
     }
     if(!fit){
@@ -106,37 +103,7 @@ nextGeneration();
                 fitValues[indexes[i]].second=DBL_MAX;
         }
     }    
-    std::sort(fitValues.begin(),fitValues.end(),
-        [](std::pair<int, double>&i, std::pair<int, double>&j){ return i.second < j.second;});
-
+    sortFitness();
     end = std::chrono::system_clock::now();
-    this->approxElapsedTime = end - start;
+    this->approxElapsed = end - start;
 }
-
-void FFGenetic::builder(int start, int end){
-   // std::cout <<std::endl<< "start: " <<start<< "---end: " <<end<<std::endl;
-    for(int i=start;i<end;++i){
-        double sum=computeFit(i);
-        double n;
-        if(sum!=DBL_MAX)
-            n=sqrt(sum);                             
-        else
-            n=DBL_MAX;
-        
-        std::unique_lock<std::mutex> lk(mtx);
-        fitValues.push_back(std::make_pair(i,n));
-        lk.unlock();
-    }
-}
-
-void FFGenetic::updater(int start, int end){
-    for(int i=start;i<end;++i){
-        double sum=computeFit(indexes[i]);
-        double n=0.0;
-        if(sum!=DBL_MAX)
-            n=sqrt(sum);
-        else
-            n=DBL_MAX;
-     
-        fitValues[indexes[i]].second=n;
-    }}

@@ -12,7 +12,7 @@
 int main(int argc, char const *argv[])
 {
   srand(time(0));
-    bool csv=true;
+  bool csv=true;
 
   if(argc != 7){
     std::cout <<"6 parameters needed\n"<<
@@ -27,18 +27,18 @@ int main(int argc, char const *argv[])
   double tol = std::atof(argv[5]);
   double perc = std::atof(argv[6]);
 
-   long points_no;
-   std::cin >> points_no;
-   std::vector<double> xs;
-   std::vector<double> ys;
-   std::vector<Point> pointsVect;
-   double tx,ty;
-   for(int i=0; i<points_no; i++)
-   {      
-     std::cin >> tx;
-     std::cin >> ty;
-     pointsVect.push_back({tx,ty});
-   }
+  long points_no;
+  std::cin >> points_no;
+  std::vector<double> xs;
+  std::vector<double> ys;
+  std::vector<Point> pointsVect;
+  double tx,ty;
+  for(int i=0; i<points_no; i++)
+  {      
+    std::cin >> tx;
+    std::cin >> ty;
+    pointsVect.push_back({tx,ty});
+  }
    
   /*RANDOM GENERATION FOR POPULATION*/ 
   std::vector<Tree *> population ;
@@ -59,18 +59,28 @@ int main(int argc, char const *argv[])
   if(!csv){
     std::cout <<"results FastFlow"<<
     " thr nw "<<nExec<<
-    " comptime(s) "<<totalFFElapsed.count()<<" upfittime(s) "<<tf.fitElapsedTime.count()<<
-    " tree_no "<<ppltSize<<" depthmax "<<maxHeigth<<
-    " iterations "<<iterNum<<" points_no "<<points_no<<
-    " tol "<<tol<<" fitness "<<tf.getBestFit().second  << "\n";
+    " comptime(s) "<<totalFFElapsed.count()<<
+    " approx(s) "<<tf.approxElapsed.count()<<
+    " fit init(s) "<<tf.fitInitElapsed.count()<<
+    " fit update(s) "<<tf.fitUpdateElapsed.count()<<
+    " next gen(s) "<<tf.nextGenElapsed.count()<<
+
+    " tree_no "<<ppltSize<<
+    " depthmax "<<maxHeigth<<
+    " iterations "<<iterNum<<
+    " points_no "<<points_no<<
+    " tol "<<tol<<
+    " fitness "<<tf.getBestFit().second  << "\n";
   }
   else{
     std::cout 
     <<nExec<< ", " //executors number
     <<totalFFElapsed.count()<<", " //completion time
-    <<tf.approxElapsedTime.count()<< ", " //fitness comp time
+    <<tf.approxElapsed.count()<< ", " //approx time
+    <<tf.fitInitElapsed.count()<< ", " //fitness init time
+    <<tf.fitUpdateElapsed.count()<< ", " //fitness update time
+    <<tf.nextGenElapsed.count()<< ", " //fitness update time
 
-    <<tf.fitElapsedTime.count()<< ", " //fitness comp time
     <<ppltSize<<", " //trees number
     <<maxHeigth<<", " //max tree heigth
     <<iterNum<<", " //max iterations

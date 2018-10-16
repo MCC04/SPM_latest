@@ -5,15 +5,15 @@ ThreadGenetic::ThreadGenetic(std::vector<Tree*> population, std::vector<Point> p
     nExecutors=nEx;    
     needToStop=false;
     busy=0;
-    //this->submitElapsed=std::chrono::seconds::zero();
-    //this->waitElapsed=std::chrono::seconds::zero();
-    //this->joinallElapsed=std::chrono::seconds::zero();
+    this->poolElapsed=std::chrono::seconds::zero();
+    this->submitElapsed=std::chrono::seconds::zero();
+    this->waitElapsed=std::chrono::seconds::zero();
+    this->joinallElapsed=std::chrono::seconds::zero();
 
-    /*std::chrono::system_clock::time_point start, end, startPoolLoop,endPoolLoop;
+    std::chrono::system_clock::time_point start, end;
     start = std::chrono::system_clock::now();
     for(int i=0; i<nExecutors;i++)
     {
-        startPoolLoop = std::chrono::system_clock::now();
         threads.push_back(std::thread([&]{
             while (true)
             {
@@ -42,20 +42,15 @@ ThreadGenetic::ThreadGenetic(std::vector<Tree*> population, std::vector<Point> p
                 }
             }
         }));
-        endPoolLoop = std::chrono::system_clock::now();
-        std::chrono::duration<double> el = endPoolLoop-startPoolLoop;
-        std::cout <<i<< "___Pool Loop iteration: " <<el.count()<<std::endl; 
     }
     end = std::chrono::system_clock::now();
     this->poolElapsed=end-start;
-    std::cout << "___Pool Time:" <<poolElapsed.count()<<std::endl;
-    */
 }
 
 ThreadGenetic::~ThreadGenetic(){
 }
 
-/*void ThreadGenetic::waitFinished()
+void ThreadGenetic::waitFinished()
 {
     std::unique_lock<std::mutex> lock(queueMutex);
     workDone.wait(lock, [this](){ return tasks.empty() && (busy==0); });
@@ -79,16 +74,16 @@ void ThreadGenetic::joinAll()
     for (std::thread& t : threads)
         if (t.joinable())
             t.join();
-}*/
+}
 
-/*void ThreadGenetic::approxFunctionTh(int maxIter, double tol){
+void ThreadGenetic::approxFunctionTh(int maxIter, double tol){
     int it=1;
     bool fit=false;
 
-    std::chrono::system_clock::time_point start, end, startFit,endFit,startGen,endGen,poolStart,poolEnd;
+    std::chrono::system_clock::time_point start,end,startFit,endFit,startGen,endGen,poolStart,poolEnd;
     start = std::chrono::system_clock::now();
-    startFit = std::chrono::system_clock::now(); 
-           
+    
+    startFit = std::chrono::system_clock::now();       
     int chunk=population.size() / nExecutors;   
     int rem=population.size()%nExecutors;
     for(int k=0 ; k<population.size(); k+=chunk){
@@ -96,36 +91,35 @@ void ThreadGenetic::joinAll()
         poolStart= std::chrono::system_clock::now(); 
         submit(w);  
         poolEnd = std::chrono::system_clock::now();
-        std::chrono::duration<double> el = poolEnd - poolStart;
-        std::cout <<it<< "___Submit init Time:" <<el.count()<<std::endl;  
-        this->submitElapsed+=el;                
+        this->submitElapsed+=poolEnd - poolStart;                
     }
     if(rem>0){
         auto w=std::bind(&ThreadGenetic::builder,this, population.size()-rem, population.size()-1);
         poolStart= std::chrono::system_clock::now(); 
         submit(w);  
         poolEnd = std::chrono::system_clock::now();
-        std::chrono::duration<double> el = poolEnd - poolStart;
-        std::cout <<it<< "___Submit Init Time:" <<el.count()<<std::endl;  
-        this->submitElapsed+=el; 
+        this->submitElapsed+=poolEnd - poolStart; 
     }      
 
     poolStart= std::chrono::system_clock::now(); 
     waitFinished();
     poolEnd = std::chrono::system_clock::now();
-    std::chrono::duration<double> el = poolEnd - poolStart;
-    std::cout <<it<< "___Wait Time:" <<el.count()<<std::endl;  
-    this->waitElapsed+=el;
+    this->waitElapsed+=poolEnd - poolStart;
 
+    sortFitness();
+    fitnessSum();
     endFit = std::chrono::system_clock::now();
-    el = endFit - startFit;
-    std::cout <<it<< "___Fits Init Time:" <<el.count()<<std::endl;
+    this->fitInitElapsed = endFit - startFit;
+
+    startGen =std::chrono::system_clock::now();
+    nextGeneration();
+    endGen=std::chrono::system_clock::now();
+    this->nextGenElapsed+=endGen -startGen;
 
     while(it<maxIter)
     {    
         startFit = std::chrono::system_clock::now(); 
         weigths.clear();         
-        
         int chunk=indexes.size() / nExecutors;  
         int rem=indexes.size()%nExecutors;   
         for(int k=0 ; k<indexes.size(); k+=chunk){
@@ -133,69 +127,40 @@ void ThreadGenetic::joinAll()
             poolStart= std::chrono::system_clock::now(); 
             submit(w);  
             poolEnd = std::chrono::system_clock::now();
-            std::chrono::duration<double> el = poolEnd - poolStart;
-            std::cout <<it<< "___Submit Time:" <<el.count()<<std::endl;  
-            this->submitElapsed+=el; 
+            this->submitElapsed+=poolEnd - poolStart; 
         }
         if(rem>0){
             auto w = std::bind(&ThreadGenetic::updater,this, indexes.size()-rem, indexes.size()-1);  
             poolStart= std::chrono::system_clock::now(); 
             submit(w);  
             poolEnd = std::chrono::system_clock::now();
-            std::chrono::duration<double> el = poolEnd - poolStart;
-            std::cout <<it<< "___Submit Time:" <<el.count()<<std::endl;  
-            this->submitElapsed+=el; 
+            this->submitElapsed+=poolEnd - poolStart; 
         }   
         poolStart= std::chrono::system_clock::now(); 
         waitFinished();
         poolEnd = std::chrono::system_clock::now();
-        std::chrono::duration<double> el = poolEnd - poolStart;
-        std::cout <<it<< "___Wait Time:" <<el.count()<<std::endl;  
-        this->waitElapsed+=el;
-
-                
+        this->waitElapsed+=poolEnd - poolStart;               
                  
-        std::sort(fitValues.begin(),fitValues.end(),
-            [](std::pair<int, double>&i, std::pair<int, double>&j){ return i.second < j.second;});
+        sortFitness();
         if(this->getBestFit().second < tol){
             fit=true;
             break;
         }         
-        this->fitSum=std::accumulate(fitValues.begin(),fitValues.end(),0.0,
-            [](double &a, std::pair<int,double> &b){return a + b.second;});      
+        fitnessSum();    
 
-        /*endFit = std::chrono::system_clock::now();
-        std::chrono::duration<double> elapsedfit = endFit - startFit;//std::cout <<"ITER:"<<it<< "___Fit Thread Time:" <<elapsedfit.count()<<std::endl;
-        nextGeneration();
-        it+=1; 
-        */
-
-/*
         endFit = std::chrono::system_clock::now();
-        //std::chrono::duration<double> el = endFit - startFit; //std::cout <<it<< "___Fit Seq Time:" <<el.count()<<std::endl; 
-        el = endFit - startFit; 
-        std::cout <<it<< "___Fit Update Time:" <<el.count()<<std::endl;    
-        this->fitElapsedTime+=el;  
+        this->fitUpdateElapsed+=endFit - startFit;  
 
         startGen =std::chrono::system_clock::now();
         nextGeneration();
         endGen=std::chrono::system_clock::now();
-        el =  endGen -startGen ;
-        std::cout <<it<< "___Next Gen Time:" <<el.count()<<std::endl;  
-        this->nextGenElapsedTime+=el;
+        this->nextGenElapsed+=endGen -startGen;
         it+=1;
-
-
-
-
     }    
     poolStart= std::chrono::system_clock::now(); 
     joinAll(); 
     poolEnd = std::chrono::system_clock::now();
-    el = poolEnd - poolStart;
-    std::cout <<it<< "___Joinall Time:" <<el.count()<<std::endl;  
-    this->joinallElapsed+=el; 
-    
+    this->joinallElapsed+=poolEnd - poolStart;     
 
     if(!fit){
         for(int i=0;i<indexes.size();i++){
@@ -206,14 +171,47 @@ void ThreadGenetic::joinAll()
                 fitValues[indexes[i]].second=DBL_MAX;
         }
     }
-    std::sort(fitValues.begin(),fitValues.end(),
-        [](std::pair<int, double>&i, std::pair<int, double>&j){ return i.second < j.second;});
-
+    sortFitness();
     end = std::chrono::system_clock::now();
-    this->fitElapsedTime = end - start;
-}*/
+    this->approxElapsed = end - start;
+}
 
-void ThreadGenetic::approxFunctionTh(int maxIter, double tol){
+void ThreadGenetic::builder(int start, int end){
+   // std::cout <<std::endl<< "start: " <<start<< "---end: " <<end<<std::endl;
+    for(int i=start;i<end;++i){
+        double sum=computeFit(i);
+        double n;
+        if(sum!=DBL_MAX)
+            n=sqrt(sum);                             
+        else
+            n=DBL_MAX;
+        
+        std::unique_lock<std::mutex> lk(mtx);
+        fitValues.push_back(std::make_pair(i,n));
+        lk.unlock();
+    }
+}
+
+void ThreadGenetic::updater(int start, int end){
+    for(int i=start;i<end;++i){
+        double sum=computeFit(indexes[i]);
+        double n=0.0;
+        if(sum!=DBL_MAX)
+            n=sqrt(sum);
+        else
+            n=DBL_MAX;
+     
+        fitValues[indexes[i]].second=n;
+    }
+}  
+
+
+
+
+
+
+
+/*void ThreadGenetic::approxFunctionTh(int maxIter, double tol){
     int it=1;
     bool fit=false;
 
@@ -239,7 +237,7 @@ std::vector<std::thread> poool;
 
 */
 
-int delta = population.size() / nExecutors;  
+/*int delta = population.size() / nExecutors;  
 for(int k=0 ; k<nExecutors-1; k+=1){
         poool.push_back(std::thread(&ThreadGenetic::builder, this, k*delta, (k+1)*delta));
         std::cout <<std::endl<< "°°°°°°start: " <<k*delta<< "---end: " <<(k+1)*delta<<std::endl;
@@ -290,7 +288,7 @@ std::cout <<it<< "___numThrs:" <<numThrs<<std::endl; */
    /* poolStart= std::chrono::system_clock::now(); 
     waitFinished();
     poolEnd = std::chrono::system_clock::now();*/
-    std::chrono::duration<double> el = poolEnd - poolStart;
+    /*std::chrono::duration<double> el = poolEnd - poolStart;
     //std::cout <<it<< "___Wait Time:" <<el.count()<<std::endl;  
     //this->waitElapsed+=el;
 
@@ -314,11 +312,11 @@ std::cout << std::endl;
         std::cout << this->indexes[i]<< ", " ;
     }*/
 
-    while(it<maxIter)
+    /*while(it<maxIter)
     {    
         startFit = std::chrono::system_clock::now(); 
         weigths.clear();  
-        poool.clear();    
+        poool.clear();    */
         
         /*for(int i=0;i<indexes.size();i++){
 
@@ -335,7 +333,7 @@ std::cout << std::endl;
                 fitValues[indexes[i]].second=DBL_MAX;
         }     */
 
-        int deltaIdx = this->indexes.size()/nExecutors;  
+       /* int deltaIdx = this->indexes.size()/nExecutors;  
         std::cout << "**deltaUpdate: " <<deltaIdx<<std::endl;
         for(int k=0 ; k<nExecutors-1; k+=1){
             poool.push_back(std::thread(&ThreadGenetic::updater, this, k*deltaIdx, (k+1)*deltaIdx));
@@ -373,7 +371,8 @@ std::cout << std::endl;
         std::cout <<it<< "___Next Gen Time:" <<el.count()<<std::endl;  
         this->nextGenElapsedTime+=el;
         it+=1;
-    }    
+    }*/    
+
    /* poolStart= std::chrono::system_clock::now(); 
     joinAll(); 
     poolEnd = std::chrono::system_clock::now();
@@ -382,7 +381,7 @@ std::cout << std::endl;
     this->joinallElapsed+=el; */
     
 
-    if(!fit){
+    /*if(!fit){
         for(int i=0;i<indexes.size();i++){
             double sum=computeFit(indexes[i]);
             if(sum!=DBL_MAX)
@@ -396,33 +395,4 @@ std::cout << std::endl;
 
     end = std::chrono::system_clock::now();
     this->fitElapsedTime = end - start;
-}
-
-void ThreadGenetic::builder(int start, int end){
-   // std::cout <<std::endl<< "start: " <<start<< "---end: " <<end<<std::endl;
-    for(int i=start;i<end;++i){
-        double sum=computeFit(i);
-        double n;
-        if(sum!=DBL_MAX)
-            n=sqrt(sum);                             
-        else
-            n=DBL_MAX;
-        
-        std::unique_lock<std::mutex> lk(mtx);
-        fitValues.push_back(std::make_pair(i,n));
-        lk.unlock();
-    }
-}
-
-void ThreadGenetic::updater(int start, int end){
-    for(int i=start;i<end;++i){
-        double sum=computeFit(indexes[i]);
-        double n=0.0;
-        if(sum!=DBL_MAX)
-            n=sqrt(sum);
-        else
-            n=DBL_MAX;
-     
-        fitValues[indexes[i]].second=n;
-    }
-}   
+}*/

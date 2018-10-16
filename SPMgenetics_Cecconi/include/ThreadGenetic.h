@@ -1,14 +1,12 @@
 #ifndef ThreadGenetic_H
 #define ThreadGenetic_H
-
 #include "../include/Genetic.h"
 #include <functional>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 
-class ThreadGenetic : public Genetic{    
-
+class ThreadGenetic : public Genetic{ 
     protected:
         unsigned int nExecutors;
         unsigned int busy;
@@ -18,20 +16,18 @@ class ThreadGenetic : public Genetic{
         std::condition_variable workDone;
         std::condition_variable cv_tasks;      
         std::queue<std::function<void()>> tasks;
-        std::vector<std::thread> threads;    
-
-
+        std::vector<std::thread> threads;  
 
         void builder(int start,int end);
         void updater(int start,int end);
-        //virtual void submit(std::function<void()> action);
-        //virtual void joinAll();
-        //virtual void waitFinished();
+        virtual void submit(std::function<void()> action);
+        virtual void joinAll();
+        virtual void waitFinished();
 
     public:
-        //std::chrono::duration<double> submitElapsed; 
-        //std::chrono::duration<double> joinallElapsed; 
-        //std::chrono::duration<double> waitElapsed;
+        std::chrono::duration<double> submitElapsed; 
+        std::chrono::duration<double> joinallElapsed; 
+        std::chrono::duration<double> waitElapsed;
         std::chrono::duration<double> poolElapsed;
 
         ThreadGenetic(std::vector<Tree *> p, std::vector<Point> ps, int perc, unsigned int nEx);

@@ -8,84 +8,70 @@ Genetic::Genetic(std::vector<Tree *> p, std::vector<Point> ps, int perc)
     this->points=ps;
     this->percentage=((int)ceil(population.size()*perc/100.0)); 
     this->fitSum=0;
-    this->fitElapsedTime=std::chrono::seconds::zero();
-    this->nextGenElapsedTime=std::chrono::seconds::zero();
-    this->compFitElapsedTime=std::chrono::seconds::zero();
+    this->fitUpdateElapsed=std::chrono::seconds::zero();
+    this->nextGenElapsed=std::chrono::seconds::zero();
+    this->compFitElapsed=std::chrono::seconds::zero();
 } 
 
 Genetic::~Genetic() {}
 
 void Genetic::approxFunction(int maxIter, double tol){
+    std::chrono::system_clock::time_point start,end,startFit,endFit,startGen,endGen,startFitComp,endFitComp;
+    start = std::chrono::system_clock::now();
     int it=1;
     bool fit=false;
-
-    std::chrono::system_clock::time_point start, end, startFit,endFit,startGen,endGen,fitCompStart,fitCompEnd;
-    start = std::chrono::system_clock::now();
-    startFit = std::chrono::system_clock::now();   
-
+    
+    startFit = std::chrono::system_clock::now();
     for(int i=0;i<population.size();i++){
 
-        fitCompStart =std::chrono::system_clock::now();
-        double sum= computeFit( i);
-        fitCompEnd=std::chrono::system_clock::now();
-        std::chrono::duration<double> compEl=fitCompEnd-fitCompStart;
-        //std::cout << "___computeFit Time:" <<compEl.count()<<std::endl;
-        this->compFitElapsedTime+=compEl;
+        startFitComp = std::chrono::system_clock::now();
+        double sum= computeFit(i);
+        endFitComp = std::chrono::system_clock::now();
+        this->compFitElapsed+=endFitComp-startFitComp;
 
         if(sum!=DBL_MAX)
             fitValues.push_back(std::make_pair(i,sqrt(sum)));
         else
             fitValues.push_back(std::make_pair(i,DBL_MAX));
     }      
+    sortFitness();
+    fitnessSum();
     endFit = std::chrono::system_clock::now();
-    std::chrono::duration<double> el = endFit - startFit;
-    std::cout <<it<< "___Fits Init Time:" <<el.count()<<std::endl;
-        
+    this->fitInitElapsed = endFit - startFit;       
 
+    startGen = std::chrono::system_clock::now();
     nextGeneration();
-
+    endGen = std::chrono::system_clock::now();
+    this->nextGenElapsed = endGen - startGen; 
 
     while(it<maxIter) 
     {
         startFit = std::chrono::system_clock::now(); 
-        weigths.clear();      
-        
+        weigths.clear();              
         for(int i=0;i<indexes.size();i++){
-
-            fitCompStart =std::chrono::system_clock::now();
+            startFitComp =std::chrono::system_clock::now();
             double sum=computeFit(indexes[i]);
-            fitCompEnd=std::chrono::system_clock::now();
-            std::chrono::duration<double> compEl=fitCompEnd-fitCompStart;
-            //std::cout << "___computeFit Time:" <<compEl.count()<<std::endl;
-            this->compFitElapsedTime+=compEl;
+            endFitComp=std::chrono::system_clock::now();
+            this->compFitElapsed+=endFitComp-startFitComp;
             
             if(sum!=DBL_MAX)
                 fitValues[indexes[i]].second=sqrt(sum);                                      
             else          
                 fitValues[indexes[i]].second=DBL_MAX;
         }      
-        std::sort(fitValues.begin(),fitValues.end(),
-            [](std::pair<int, double>&i, std::pair<int, double>&j){ return i.second < j.second;});
-
+        sortFitness();
         if(this->getBestFit().second < tol){
             fit=true;
             break;
         }       
-        this->fitSum=std::accumulate(fitValues.begin(),fitValues.end(),0.0,
-            [](double &a, std::pair<int,double> &b){return a + b.second;});     
-
+        fitnessSum(); 
         endFit = std::chrono::system_clock::now();
-        //std::chrono::duration<double> el = endFit - startFit; //std::cout <<it<< "___Fit Seq Time:" <<el.count()<<std::endl; 
-        el = endFit - startFit; 
-        std::cout <<it<< "___Fit Update Time:" <<el.count()<<std::endl;    
-        this->fitElapsedTime+=el;  
+        this->fitUpdateElapsed+=endFit - startFit;  
 
         startGen =std::chrono::system_clock::now();
         nextGeneration();
         endGen=std::chrono::system_clock::now();
-        el =  endGen -startGen ;
-        std::cout <<it<< "___Next Gen Time:" <<el.count()<<std::endl;  
-        this->nextGenElapsedTime+=el;
+        this->nextGenElapsed+=endGen -startGen;
         it+=1;        
     }
     if(!fit){
@@ -97,11 +83,20 @@ void Genetic::approxFunction(int maxIter, double tol){
                 fitValues[indexes[i]].second=DBL_MAX;
         }
     }   
-    std::sort(fitValues.begin(),fitValues.end(),
-        [](std::pair<int, double>&i, std::pair<int, double>&j){ return i.second < j.second;});
+    sortFitness();
 
     end = std::chrono::system_clock::now();
-    this->approxElapsedTime = end - start;
+    this->approxElapsed = end - start;
+}
+
+void Genetic::sortFitness(){
+    std::sort(this->fitValues.begin(),this->fitValues.end(),
+        [](std::pair<int, double>&i, std::pair<int, double>&j){ return i.second < j.second;});
+}
+
+void Genetic::fitnessSum(){
+    this->fitSum=std::accumulate(fitValues.begin(),fitValues.end(),0.0,
+            [](double &a, std::pair<int,double> &b){return a + b.second;}); 
 }
 
 double Genetic::computeFit(const int i){
@@ -128,13 +123,9 @@ double Genetic::computeFit(const int i){
 
 void Genetic::nextGeneration(){
     indexes.clear();
-
-    //std::chrono::system_clock::time_point start, end;
-    //start = std::chrono::system_clock::now();
-
     computeWeights();
     int gOp;
-    for(int i=0; i<percentage;i++){//first= tree index; second= corresponding fit index
+    for(int i=0; i<percentage;i++){//first=tree index; second=tree fit index
         std::pair<int,int> idxs=Select();       
         if(idxs.first>-1){
             weigths[idxs.second]=0;
@@ -151,16 +142,10 @@ void Genetic::nextGeneration(){
                     Crossover(*population[idxs.first],*population[idxs2.first]);//std::cout <<"GEN_Count:"<<i<<"  Crossover on: "<< idxs.first <<std::endl;                        
                     indexes.push_back(idxs.second);
                     indexes.push_back(idxs2.second);
-                } 
-                //else std::cout << "WARN: idxs must be diff for Crossover!"<<std::endl;
+                }//else std::cout << "WARN: idxs must be diff for Crossover!"<<std::endl;
             }//std::cout <<"GEN_Count:"<<i<<"  Crossover on: "<< idxs.first <<" and " << idxs2.first << std::endl;
-        }
-        //else std::cout << "WARN: Invalid selected index, value < 0!"<<std::endl;   
+        }//else std::cout << "WARN: Invalid selected index, value < 0!"<<std::endl;   
     } 
-   // end = std::chrono::system_clock::now();
-   // std::chrono::duration<double> el=end - start;
-   // this->nextGenElapsedTime += el;  //std::cout << "GEN_elapsed:" << this->nextGenElapsedTime.count() << std::endl;
-   // std::cout << "___NextGen elapsed:" << el.count() << std::endl;
 }
 
 void Genetic::computeWeights(){
@@ -204,24 +189,23 @@ void Genetic::Mutation(Tree &t){
 }
 
 void Genetic::Crossover(Tree &t1,Tree &t2){
-        int r1=t1.pickRandSubtree();
-        int r2=t2.pickRandSubtree();
+    int r1=t1.pickRandSubtree();
+    int r2=t2.pickRandSubtree();
 
-        Node *n1=t1.getNode(r1);
-        int idx1=n1->getIndex();
-        Node *n2=t2.getNode(r2);
-        int idx2=n2->getIndex();
-        Node *par1=n1->getParent(); 
-        Node *par2=n2->getParent(); 
+    Node *n1=t1.getNode(r1);
+    int idx1=n1->getIndex();
+    Node *n2=t2.getNode(r2);
+    int idx2=n2->getIndex();
+    Node *par1=n1->getParent(); 
+    Node *par2=n2->getParent(); 
 
-        par1->eraseChild(idx1);
-        n2->setIndex(idx1);
-        par1->insertChild(n2,idx1);
-        par2->eraseChild(idx2);
-        n1->setIndex(idx2);        
-        par2->insertChild(n1,idx2);
-
-        //UPDATE TREE
-        t1.buildNodesList();  
-        t2.buildNodesList();  
+    par1->eraseChild(idx1);
+    n2->setIndex(idx1);
+    par1->insertChild(n2,idx1);
+    par2->eraseChild(idx2);
+    n1->setIndex(idx2);        
+    par2->insertChild(n1,idx2);
+    //UPDATE TREE
+    t1.buildNodesList();  
+    t2.buildNodesList();  
 }
